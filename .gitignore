@@ -1,0 +1,19 @@
+# Ignore Python virtual environment
+backend/venv/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Ignore dotenv and env files
+.env
+
+# Node modules (when frontend is added)
+node_modules/
