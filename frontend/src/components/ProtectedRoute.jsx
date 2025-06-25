@@ -12,7 +12,7 @@ const ProtectedRoute = ({ children }) => {
   useEffect(() => {
     const verifyToken = async () => {
       try {
-        await axios.get("http://localhost:8000/verify-token", {
+        await axios.get("http://localhost:8080/verify-token", {
           headers: {
             Authorization: `Bearer ${token}`
           }

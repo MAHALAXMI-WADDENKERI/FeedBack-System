@@ -7,6 +7,8 @@ export default function FeedbackForm({ employeeId, onSuccess, onCancel }) {
   const [improvements, setImprovements] = useState('');
   const [message, setMessage] = useState('');
   const [sentiment, setSentiment] = useState('neutral');
+  const [sentimentScore, setSentimentScore] = useState('');
+  const [tags, setTags] = useState(''); 
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -21,6 +23,7 @@ export default function FeedbackForm({ employeeId, onSuccess, onCancel }) {
       setSubmitting(false);
       return;
     }
+    const tagsArray = tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
 
     try {
       const payload = {
@@ -29,9 +32,10 @@ export default function FeedbackForm({ employeeId, onSuccess, onCancel }) {
         areas_to_improve: improvements,
         message,
         sentiment,
+        tags: tagsArray
       };
 
-      await axios.post('http://localhost:8000/feedback', payload, {
+      await axios.post('http://localhost:8080/feedback', payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -91,6 +95,29 @@ export default function FeedbackForm({ employeeId, onSuccess, onCancel }) {
           <option value="negative">Negative</option>
         </select>
       </div>
+      <div>
+        <label htmlFor="sentimentScore" className="block text-sm font-medium text-gray-700">Sentiment Score (0-100, Optional):</label>
+        <input
+          type="number"
+          id="sentimentScore"
+          value={sentimentScore}
+          onChange={(e) => setSentimentScore(e.target.value)}
+          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+          min="0"
+          max="100"
+        />
+      </div>
+      <div>
+        <label htmlFor="tags" className="block text-sm font-medium text-gray-700">Tags (comma-separated):</label>
+        <input
+          type="text"
+          id="tags"
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+          placeholder="e.g., communication, teamwork, leadership"
+        />
+      </div>
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
@@ -105,7 +132,7 @@ export default function FeedbackForm({ employeeId, onSuccess, onCancel }) {
         </button>
         <button
           type="submit"
-          className="px-4 py-2 bg-indigo-600 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-50"
+          className="px-4 py-2 bg-indigo-600 border border-transparent rounded-md shadow-sm text-sm font-medium text-black hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-50"
           disabled={submitting}
         >
           {submitting ? 'Submitting...' : 'Submit Feedback'}

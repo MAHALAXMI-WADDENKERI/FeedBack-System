@@ -10,15 +10,45 @@ from app.schemas import LoginRequest, FeedbackCreate, Feedback as FeedbackSchema
 from app.utils import get_password_hash, verify_password, create_access_token, get_current_user, require_role
 from pydantic import ValidationError
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/feedback",
+    tags=["Feedback"],
+)
+
+@router.post("/", response_model=schemas.Feedback)
+def create_feedback(
+    feedback: schemas.FeedbackCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role != "manager":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only managers can create feedback"
+        )
+
+    db_feedback = models.Feedback(
+        manager_id=current_user.id,
+        employee_id=feedback.employee_id,
+        strengths=feedback.strengths,
+        areas_to_improve=feedback.areas_to_improve,
+        message=feedback.message,
+        sentiment=feedback.sentiment,
+        sentiment_score=feedback.sentiment_score,
+        tags=feedback.tags 
+    )
+    db.add(db_feedback)
+    db.commit()
+    db.refresh(db_feedback)
+    return db_feedback
 
 @router.get("/")
 def root():
     return {"message": "Hello from routes!"}
 
-@router.get("/feedback/me", response_model=List[FeedbackSchema])
+@router.get("/me", response_model=List[FeedbackSchema])
 async def read_own_feedback(
-    current_user: User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db) 
 ):
     if current_user.role == "employee":
@@ -30,13 +60,56 @@ async def read_own_feedback(
             detail="This endpoint is for employees to view their received feedback."
         )
 
-@router.get("/verify-token")
-def verify_token(current_user: User = Depends(get_current_user)):
-    return {"status": "Token is valid", "user": {"username": current_user.name, "role": current_user.role}}
+@router.post("/{feedback_id}/comments/", response_model=schemas.FeedbackComment, status_code=status.HTTP_201_CREATED)
+async def add_comment_to_feedback(
+    feedback_id: int,
+    comment: schemas.FeedbackCommentBase, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    feedback_item = db.query(models.Feedback).filter(models.Feedback.id == feedback_id).first()
+    if not feedback_item:
+        raise HTTPException(status_code=404, detail="Feedback not found")
 
-@router.get("/feedback/all", response_model=List[FeedbackSchema])
+    if current_user.role == "employee" and feedback_item.employee_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Employees can only comment on feedback directed to them."
+        )
+    elif current_user.role == "manager" and feedback_item.manager_id != current_user.id:
+        
+         pass 
+
+
+    comment_create = schemas.FeedbackCommentCreate(
+        feedback_id=feedback_id,
+        comment_text=comment.comment_text
+    )
+    db_comment = crud.create_feedback_comment(db, comment_create, current_user.id)
+    return db_comment
+
+@router.get("/{feedback_id}/comments/", response_model=List[schemas.FeedbackComment])
+async def get_feedback_comments(
+    feedback_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user) 
+):
+    feedback_item = db.query(models.Feedback).filter(models.Feedback.id == feedback_id).first()
+    if not feedback_item:
+        raise HTTPException(status_code=404, detail="Feedback not found")
+
+    if current_user.role == "employee" and feedback_item.employee_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Employees can only view comments on their own feedback."
+        )
+
+    comments = crud.get_comments_for_feedback(db, feedback_id)
+    return comments    
+    
+@router.get("/all", response_model=List[FeedbackSchema])
 def get_all_feedback(
-    current_user: User = Depends(require_role("manager")),
+    current_user: models.User = Depends(require_role("manager")),
     db: Session = Depends(get_db)
 ):
     all_feedback = db.query(models.Feedback).all()
@@ -84,7 +157,7 @@ async def get_user_by_id(
     return user
 
 
-@router.get("/feedback/user/{user_id}", response_model=List[schemas.Feedback])
+@router.get("/user/{user_id}", response_model=List[schemas.Feedback])
 async def get_feedback_for_user(
     user_id: int,
     current_user: models.User = Depends(get_current_user),
@@ -101,7 +174,7 @@ async def get_feedback_for_user(
     return feedback_items
 
 
-@router.get("/feedback/manager-given", response_model=List[schemas.Feedback])
+@router.get("/manager-given", response_model=List[schemas.Feedback])
 async def get_manager_given_feedback(
     current_user: models.User = Depends(require_role("manager")),
     db: Session = Depends(get_db) 
@@ -110,7 +183,7 @@ async def get_manager_given_feedback(
     return feedback_items
 
 
-@router.get("/feedback/employee/{employee_id}", response_model=List[schemas.Feedback])
+@router.get("/employee/{employee_id}", response_model=List[schemas.Feedback])
 async def get_all_feedback_for_specific_employee(
     employee_id: int,
     current_user: models.User = Depends(get_current_user),
@@ -124,24 +197,11 @@ async def get_all_feedback_for_specific_employee(
 
     feedback_items = db.query(models.Feedback).filter(models.Feedback.employee_id == employee_id).all()
     return feedback_items
-@router.post("/register", response_model=schemas.UserDisplay, status_code=status.HTTP_201_CREATED)
-async def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    db_user = crud.get_user_by_username(db, username=user.username)
-    if db_user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already registered")
-    
-    if user.email:
-        db_user_by_email = db.query(models.User).filter(models.User.email == user.email).first()
-        if db_user_by_email:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
-    new_user = crud.create_user(db=db, user=user)
-    return new_user
-
-@router.get("/feedback/detail/{feedback_id}", response_model=schemas.Feedback)
+@router.get("/detail/{feedback_id}", response_model=schemas.Feedback)
 async def get_single_feedback_detail(
     feedback_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(database.get_db)
 ):
     feedback_item = db.query(models.Feedback).filter(models.Feedback.id == feedback_id).first()
@@ -161,10 +221,10 @@ async def get_single_feedback_detail(
     return feedback_item
 
 
-@router.post("/feedback/", response_model=FeedbackSchema, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=FeedbackSchema, status_code=status.HTTP_201_CREATED)
 def create_feedback_entry(
     feedback: FeedbackCreate,
-    current_user: User = Depends(require_role("manager")),
+    current_user: models.User = Depends(require_role("manager")),
     db: Session = Depends(get_db) 
 ):
     db_feedback = models.Feedback(
@@ -182,34 +242,6 @@ def create_feedback_entry(
     return db_feedback
 
 @router.get("/dashboard")
-def get_dashboard_data(current_user: User = Depends(get_current_user)):
-    return {"message": f"Welcome, {current_user.name}!", "role": current_user.role}
+def get_dashboard_data(current_user: models.User = Depends(get_current_user)):
+    return {"message": f"Welcome, {current_user.username}!", "role": current_user.role}
 
-@router.post("/login")
-def login(form_data: LoginRequest, db: Session = Depends(get_db)): 
-   
-    try:
-        user = db.query(models.User).filter(models.User.name == form_data.username).first()
-        if not user:
-            raise HTTPException(status_code=401, detail="Invalid username or password")
-
-        if not verify_password(form_data.password, user.hashed_password):
-            raise HTTPException(status_code=401, detail="Invalid username or password")
-
-        access_token = create_access_token(data={"sub": user.name, "role": user.role, "id": user.id})
-       
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "user": {
-                "id": user.id,
-                "username": user.name,
-                "role": user.role
-            }
-        }
-
-    except Exception as e:
-        print(f"Backend: An unexpected error occurred in /login: {e}")
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An internal server error occurred during login.")

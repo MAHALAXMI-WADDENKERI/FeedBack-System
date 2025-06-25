@@ -7,7 +7,7 @@ function EmployeeDashboard() {
   const [feedbackList, setFeedbackList] = useState([]);
 
   useEffect(() => {
-    axios.get(`http://localhost:8000/feedback/employee/${id}`)
+    axios.get(`http://localhost:8080/feedback/employee/${id}`)
       .then(res => setFeedbackList(res.data))
       .catch(err => console.error(err));
   }, [id]);

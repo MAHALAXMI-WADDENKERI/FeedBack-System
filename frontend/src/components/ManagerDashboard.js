@@ -6,7 +6,7 @@ function ManagerDashboard() {
   const [feedback, setFeedback] = useState({});
 
   useEffect(() => {
-    axios.get("http://localhost:8000/users/")
+    axios.get("http://localhost:8080/users/")
       .then(res => setUsers(res.data))
       .catch(err => console.error(err));
   }, []);
@@ -17,9 +17,9 @@ function ManagerDashboard() {
       areas_to_improve: feedback[userId]?.areas_to_improve || "",
       sentiment: feedback[userId]?.sentiment || "neutral",
       employee_id: userId,
-      manager_id: 1 // hardcoded manager
+      manager_id: 1 
     };
-    axios.post("http://localhost:8000/feedback/", data)
+    axios.post("http://localhost:8080/feedback/", data)
       .then(() => alert("Feedback submitted!"))
       .catch(err => console.error(err));
   };

@@ -1,18 +1,19 @@
+# app/utils.py
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from typing import Optional 
+from typing import Optional
 from passlib.context import CryptContext
 
 
-from app import models, database, schemas 
+from app import models, database, schemas
 
-SECRET_KEY = "your-secret-key" 
+SECRET_KEY = "your-secret-key"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30 
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -31,7 +32,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM) # Changed algorithms to list for consistency
     return encoded_jwt
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(database.get_db)):
@@ -47,12 +48,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         user_id: int = payload.get("id")
         if username is None or user_role is None or user_id is None:
             raise credentials_exception
-        
-    except JWTError as e:
+
+    except JWTError: 
         raise credentials_exception
-    except Exception as e: 
+    except Exception: 
         raise credentials_exception
-    user = db.query(models.User).filter(models.User.name == username).first()
+
+    user = db.query(models.User).filter(models.User.username == username).first() # <-- CHANGED from .name to .username
+
     if user is None:
         raise credentials_exception
     return user
@@ -64,5 +67,5 @@ def require_role(required_role: str):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"User does not have the required role: {required_role}"
             )
-        return current_user 
+        return current_user
     return role_checker
