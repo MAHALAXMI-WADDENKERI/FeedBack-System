@@ -131,7 +131,7 @@ export default function FeedbackDetail() {
       setError("Feedback ID not provided in URL.");
       setLoading(false);
     }
-  }, [fetchAllFeedbackData]); 
+  }, [fetchAllFeedbackData, feedbackId]); 
 
   if (loading) {
     return <div className="d-flex align-items-center justify-content-center min-vh-100 bg-light fs-4">Loading feedback details...</div>;
