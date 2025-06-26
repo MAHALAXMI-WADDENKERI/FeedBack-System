@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Feedback Report - {{ feedback.id }}</title>
+    <style>
+        body { font-family: sans-serif; margin: 40px; color: #333; }
+        h1, h2 { color: #0056b3; }
+        .section { margin-bottom: 20px; padding: 15px; border: 1px solid #eee; border-radius: 8px; background-color: #f9f9f9; }
+        .label { font-weight: bold; color: #555; }
+        .value { margin-bottom: 10px; }
+        .sentiment-positive { color: green; font-weight: bold; }
+        .sentiment-negative { color: red; font-weight: bold; }
+        .sentiment-neutral { color: orange; font-weight: bold; }
+        .tags span { display: inline-block; background-color: #e0f7fa; color: #007bb6; padding: 5px 10px; border-radius: 15px; margin-right: 5px; margin-bottom: 5px; font-size: 0.9em; }
+        .comments-section { margin-top: 30px; border-top: 1px solid #ddd; padding-top: 20px; }
+        .comment { background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 5px; padding: 10px; margin-bottom: 10px; }
+        .comment-meta { font-size: 0.85em; color: #777; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Feedback Report #{{ feedback.id }}</h1>
+
+    <div class="section">
+        <p><span class="label">Given On:</span> {{ feedback.created_at }}</p>
+        <p><span class="label">For Employee:</span> {{ feedback.employee_username }} (ID: {{ feedback.employee_id }})</p>
+        <p><span class="label">From Manager:</span> {{ feedback.manager_username }} (ID: {{ feedback.manager_id }})</p>
+    </div>
+
+    <div class="section">
+        <h2>Details</h2>
+        <p><span class="label">Strengths:</span></p>
+        <div class="value">{{ feedback.strengths if feedback.strengths else 'N/A' }}</div>
+
+        <p><span class="label">Areas to Improve:</span></p>
+        <div class="value">{{ feedback.areas_to_improve if feedback.areas_to_improve else 'N/A' }}</div>
+
+        <p><span class="label">Message:</span></p>
+        <div class="value">{{ feedback.message if feedback.message else 'N/A' }}</div>
+
+        <p><span class="label">Sentiment:</span> 
+            <span class="sentiment-{{ feedback.sentiment }}">{{ feedback.sentiment if feedback.sentiment else 'N/A' }}</span>
+            {% if feedback.sentiment_score %}(Score: {{ "%.2f"|format(feedback.sentiment_score) }}){% endif %}
+        </p>
+        
+        {% if feedback.tags %}
+        <p class="label">Tags:</p>
+        <div class="tags">
+            {% for tag in feedback.tags %}
+            <span>{{ tag }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    {% if feedback.comments %}
+    <div class="comments-section">
+        <h2>Comments</h2>
+        {% for comment in feedback.comments %}
+        <div class="comment">
+            <p class="comment-meta">Commented on: {{ comment.created_at }}</p>
+            <p>{{ comment.comment_text }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+</body>
+</html>

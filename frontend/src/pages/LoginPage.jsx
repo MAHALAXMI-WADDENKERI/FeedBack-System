@@ -23,12 +23,10 @@ const Login = ({ setUser }) => {
       localStorage.setItem('user', JSON.stringify(user));
 
       if (user.role === 'manager') {
-        navigate('/manager-dashboard');
-      } else if (user.role === 'employee') {
-        navigate('/employee-dashboard');
-      } else {
         navigate('/dashboard');
-      }
+      } else if (user.role === 'employee') {
+        navigate('/dashboard');
+      } 
 
     } catch (err) {
       setError(err.response?.data?.detail || "Login failed. Please check your credentials.");

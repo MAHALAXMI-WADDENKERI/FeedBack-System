@@ -33,6 +33,7 @@ class User(Base):
     role = Column(String(50), default="employee", nullable=False) 
     is_active = Column(Boolean, default=True)
 
+    
 class Feedback(Base):
     __tablename__ = "feedback"
 
@@ -62,3 +63,4 @@ class FeedbackComment(Base):
 
     feedback = relationship("Feedback", back_populates="comments")
     commenter = relationship("User")
+

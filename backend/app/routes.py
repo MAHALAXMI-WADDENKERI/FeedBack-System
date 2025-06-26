@@ -5,10 +5,20 @@ from datetime import timedelta
 from typing import Optional, List 
 from app import database, models, schemas, crud
 from app.database import get_db 
+from fastapi.responses import Response 
+from weasyprint import HTML
+from jinja2 import Environment, FileSystemLoader
 from app.models import User, Feedback
 from app.schemas import LoginRequest, FeedbackCreate, Feedback as FeedbackSchema, TokenData
 from app.utils import get_password_hash, verify_password, create_access_token, get_current_user, require_role
 from pydantic import ValidationError
+template_env = Environment(loader=FileSystemLoader("app/templates"))
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+from io import BytesIO
+
 
 router = APIRouter(
     prefix="/feedback",
@@ -197,7 +207,89 @@ async def get_all_feedback_for_specific_employee(
 
     feedback_items = db.query(models.Feedback).filter(models.Feedback.employee_id == employee_id).all()
     return feedback_items
+@router.get("/detail/{feedback_id}/pdf", response_class=Response, responses={
+    200: {"content": {"application/pdf": {}}},
+    404: {"description": "Feedback not found"},
+    403: {"description": "Not authorized to download this PDF"}
+})
+async def export_feedback_as_pdf(
+    feedback_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(database.get_db)
+):
+    feedback_item = db.query(models.Feedback).filter(models.Feedback.id == feedback_id).first()
 
+    if not feedback_item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Feedback not found."
+        )
+
+    if current_user.role == "employee" and feedback_item.employee_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to download this PDF."
+        )
+
+    manager = crud.get_user(db, feedback_item.manager_id)
+
+    employee = crud.get_user(db, feedback_item.employee_id)
+
+    if not manager or not employee:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Associated manager or employee not found."
+        )
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+
+ 
+    story.append(Paragraph(f"Feedback Details (ID: {feedback_item.id})", styles['h1']))
+    story.append(Spacer(1, 0.2 * inch))
+
+
+    story.append(Paragraph(f"<b>For Employee:</b> {employee.username} (ID: {employee.id}, Email: {employee.email})", styles['Normal']))
+    story.append(Paragraph(f"<b>From Manager:</b> {manager.username} (ID: {manager.id}, Email: {manager.email})", styles['Normal']))
+    story.append(Spacer(1, 0.1 * inch))
+    story.append(Paragraph(f"<b>Date Given:</b> {feedback_item.created_at.strftime('%Y-%m-%d %H:%M:%S') if feedback_item.created_at else 'N/A'}", styles['Normal']))
+    story.append(Spacer(1, 0.2 * inch))
+    story.append(HRFlowable(width="100%", thickness=1, lineCap='round', color='black'))
+    story.append(Spacer(1, 0.2 * inch))
+
+   
+    story.append(Paragraph("<b>Feedback Message:</b>", styles['h3']))
+    message_text = feedback_item.message if feedback_item.message else "(No feedback message provided)"
+    story.append(Paragraph(message_text, styles['Normal']))
+    story.append(Spacer(1, 0.2 * inch))
+
+  
+    if feedback_item.strengths:
+        story.append(Paragraph("<b>Strengths:</b>", styles['h3']))
+        story.append(Paragraph(feedback_item.strengths, styles['Normal']))
+        story.append(Spacer(1, 0.2 * inch))
+
+  
+    if feedback_item.areas_to_improve:
+        story.append(Paragraph("<b>Areas to Improve:</b>", styles['h3']))
+        story.append(Paragraph(feedback_item.areas_to_improve, styles['Normal']))
+        story.append(Spacer(1, 0.2 * inch))
+
+    sentiment_display = feedback_item.sentiment.capitalize() if feedback_item.sentiment else 'N/A'
+    sentiment_score_display = f" (Score: {feedback_item.sentiment_score:.2f})" if feedback_item.sentiment_score else ''
+    story.append(Paragraph(f"<b>Sentiment:</b> {sentiment_display}{sentiment_score_display}", styles['Normal']))
+
+    if feedback_item.tags:
+        tags_display = ", ".join(feedback_item.tags)
+        story.append(Paragraph(f"<b>Tags:</b> {tags_display}", styles['Normal']))
+
+    doc.build(story)
+
+    buffer.seek(0)
+    return Response(content=buffer.getvalue(), media_type="application/pdf",
+                    headers={"Content-Disposition": f"attachment; filename=feedback_{feedback_id}.pdf"})
 @router.get("/detail/{feedback_id}", response_model=schemas.Feedback)
 async def get_single_feedback_detail(
     feedback_id: int,
@@ -244,4 +336,10 @@ def create_feedback_entry(
 @router.get("/dashboard")
 def get_dashboard_data(current_user: models.User = Depends(get_current_user)):
     return {"message": f"Welcome, {current_user.username}!", "role": current_user.role}
+
+
+
+
+
+
 

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 from typing import Optional, List
 from app import crud 
+from app.models import User
 from app.database import get_db
 from app import schemas, models
 from app.utils import verify_password, create_access_token, get_current_user, require_role

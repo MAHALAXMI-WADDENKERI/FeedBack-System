@@ -11,29 +11,41 @@ export default function EmployeeDashboard() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem('user'));
-    const token = localStorage.getItem('token');
+    const fetchFeedback = async () => {
+      const user = JSON.parse(localStorage.getItem('user'));
+      const token = localStorage.getItem('token');
 
-    if (user && user.id && token) {
-      setUserId(user.id);
-      axios
-        .get(`http://localhost:8080/feedback/user/${user.id}`, {
+      if (!user || !user.id || !token) {
+        setError('User not logged in or user ID missing.');
+        setLoading(false);
+        return;
+      }
+
+      setUserId(user.id); 
+
+      try {
+        const response = await axios.get('http://localhost:8080/feedback/me', {
           headers: { Authorization: `Bearer ${token}` },
-        })
-        .then((res) => {
-          setFeedbackList(res.data);
-          setLoading(false);
-        })
-        .catch((err) => {
-          console.error('Failed to fetch feedback:', err);
-          setError('Failed to load feedback. Please try again.');
-          setLoading(false);
         });
-    } else {
-      setError('User not logged in or user ID missing.');
-      setLoading(false);
-    }
-  }, []);
+        setFeedbackList(response.data);
+      } catch (err) {
+        console.error('Error fetching feedback for employee dashboard:', err);
+        let errorMessage = 'Failed to load feedback. Please try again later.';
+        if (err.response) {
+          if (err.response.status === 403) {
+            errorMessage = 'You are not authorized to view this content.';
+          } else if (err.response.data && err.response.data.detail) {
+            errorMessage = err.response.data.detail;
+          }
+        }
+        setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFeedback(); 
+  }, []); 
 
   if (loading) {
     return <div className="d-flex align-items-center justify-content-center min-vh-100 bg-light fs-4">Loading feedback...</div>;
@@ -94,9 +106,9 @@ export default function EmployeeDashboard() {
                       </span>
                     ))}
                   </div>
-        
+
                   <Link
-                    to={`/feedback/detail/${fb.id}`} 
+                    to={`/feedback/${fb.id}`}
                     className="btn btn-primary btn-sm mt-4"
                   >
                     View Details

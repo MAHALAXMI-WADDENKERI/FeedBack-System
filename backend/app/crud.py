@@ -2,6 +2,9 @@
 from sqlalchemy.orm import Session
 from . import models, schemas, auth
 from app.utils import get_password_hash 
+def get_user(db: Session, user_id: int):
+    return db.query(models.User).filter(models.User.id == user_id).first()
+
 def get_user_by_username(db: Session, username: str):
     return db.query(models.User).filter(models.User.username == username).first()
 
@@ -65,3 +68,4 @@ def get_feedback_by_employee(db: Session, emp_id: int):
 
 def get_employees(db: Session):
     return db.query(models.User).filter(models.User.role == "employee").all()
+
