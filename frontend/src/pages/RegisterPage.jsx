@@ -29,7 +29,7 @@ const RegisterPage = () => {
         role,
       });
 
-      alert('Registration successful! Please log in with your new credentials.');
+      alert('Registration successful! Please log in with your new credentials.', res.data);
       navigate('/login');
 
     } catch (err) {

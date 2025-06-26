@@ -16,7 +16,6 @@ import EmployeeFeedbackList from './pages/EmployeeFeedbackList';
 axios.defaults.baseURL = 'http://localhost:8080';
 function App() {
   const [user, setUser] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   useEffect(() => {
     const token = localStorage.getItem('token');
