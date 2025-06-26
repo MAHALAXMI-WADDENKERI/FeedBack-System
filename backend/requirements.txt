@@ -2,5 +2,11 @@ fastapi
 uvicorn
 sqlalchemy
 pydantic
+email-validator
 mysql-connector-python
 python-dotenv
+python-jose
+passlib[bcrypt]
+weasyprint
+jinja2
+reportlab
