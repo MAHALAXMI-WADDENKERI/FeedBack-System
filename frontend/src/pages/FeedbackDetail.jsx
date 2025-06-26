@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
@@ -16,7 +16,7 @@ export default function FeedbackDetail() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState(null);
 
-  const fetchAllFeedbackData = async () => {
+  const fetchAllFeedbackData = useCallback(async () => { // <--- Start useCallback here
     const token = localStorage.getItem('token');
     if (!token) {
       setError('Authentication token not found. Please log in.');
@@ -25,113 +25,78 @@ export default function FeedbackDetail() {
     }
 
     try {
-      const userRes = await axios.get('http://localhost:8080/verify-token', {
+      // Fetch current user details to determine role and ID
+      const userRes = await axios.get('/api/verify-token', { // Ensure this is '/api/verify-token' or your Vercel backend URL
         headers: { Authorization: `Bearer ${token}` },
       });
       setCurrentUser(userRes.data);
 
-      const feedbackRes = await axios.get(`http://localhost:8080/feedback/detail/${feedbackId}`, {
+      // Fetch feedback details
+      const feedbackRes = await axios.get(`/api/feedback/${feedbackId}`, { // Ensure this is '/api/feedback/${feedbackId}'
         headers: { Authorization: `Bearer ${token}` },
       });
       setFeedback(feedbackRes.data);
 
-      const commentsRes = await axios.get(`http://localhost:8080/feedback/${feedbackId}/comments/`, {
+      // Fetch comments for the feedback
+      const commentsRes = await axios.get(`/api/feedback/${feedbackId}/comments`, { // Ensure this is '/api/feedback/${feedbackId}/comments'
         headers: { Authorization: `Bearer ${token}` },
       });
       setComments(commentsRes.data);
 
-      setLoading(false);
     } catch (err) {
-      console.error('Failed to fetch feedback details or comments:', err);
-      let displayErrorMessage = 'Failed to load feedback details. Please try again.';
-      if (err.response) {
-          if (err.response.status === 403) {
-              displayErrorMessage = 'You do not have permission to view this feedback.';
-          } else if (err.response.status === 404) {
-              displayErrorMessage = 'Feedback not found.';
-          } else if (err.response.data && err.response.data.detail) {
-              displayErrorMessage = err.response.data.detail;
-          }
+      console.error('Failed to fetch feedback details or user:', err);
+      if (err.response && err.response.status === 401) {
+        setError('Unauthorized. Please log in again.');
+      } else if (err.response && err.response.status === 403) {
+        setError('Forbidden. You do not have access to this feedback.');
+      } else if (err.response && err.response.data && err.response.data.detail) {
+        setError(err.response.data.detail);
+      } else {
+        setError('Failed to load details. Please try again.');
       }
-      setError(displayErrorMessage);
+    } finally {
       setLoading(false);
     }
-  };
-
-  const handleDownloadPdf = async () => {
-    setPdfLoading(true);
-    setPdfError(null);
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setPdfError('Authentication token not found. Please log in.');
-      setPdfLoading(false);
-      return;
-    }
-
-    try {
-      const response = await axios.get(`http://localhost:8080/feedback/detail/${feedbackId}/pdf`, {
-        headers: { Authorization: `Bearer ${token}` },
-        responseType: 'blob', 
-      });
-
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `feedback_report_${feedbackId}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-
-    } catch (err) {
-      console.error('Failed to download PDF:', err);
-      setPdfError('Failed to download PDF. Please try again.');
-    } finally {
-      setPdfLoading(false);
-    }
-  };
-
+  }, [feedbackId]);
+  useEffect(() => {
+    fetchAllFeedbackData();
+  }, [fetchAllFeedbackData]); 
   const handleSubmitComment = async (e) => {
-    e.preventDefault(); 
-    if (!newCommentText.trim()) {
-      setCommentError('Comment cannot be empty.');
-      return;
-    }
-
+    e.preventDefault();
     setCommentLoading(true);
     setCommentError(null);
     const token = localStorage.getItem('token');
+    if (!token || !currentUser || !feedbackId) {
+      setCommentError('Authentication or feedback details missing.');
+      setCommentLoading(false);
+      return;
+    }
 
     try {
       await axios.post(
-        `http://localhost:8080/feedback/${feedbackId}/comments/`,
+        `/api/feedback/${feedbackId}/comments`, // <--- Ensure this is '/api/feedback/${feedbackId}/comments'
         { comment_text: newCommentText },
         {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
-      setNewCommentText(''); 
-      await fetchAllFeedbackData();
+      setNewCommentText('');
+      // Re-fetch comments to update the list
+      await fetchAllFeedbackData(); // <--- Re-fetching data after comment
     } catch (err) {
       console.error('Failed to submit comment:', err);
-      let errorMessage = 'Failed to submit comment. Please try again.';
       if (err.response && err.response.data && err.response.data.detail) {
-        errorMessage = err.response.data.detail;
+        setCommentError(err.response.data.detail);
+      } else {
+        setCommentError('Failed to submit comment. Please try again.');
       }
-      setCommentError(errorMessage);
     } finally {
       setCommentLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (feedbackId) {
-      fetchAllFeedbackData();
-    } else {
-      setError("Feedback ID not provided in URL.");
-      setLoading(false);
-    }
-  }, [fetchAllFeedbackData, feedbackId]); 
 
   if (loading) {
     return <div className="d-flex align-items-center justify-content-center min-vh-100 bg-light fs-4">Loading feedback details...</div>;
@@ -155,6 +120,33 @@ export default function FeedbackDetail() {
     (currentUser.role === 'employee' && feedback.employee_id === currentUser.id) ||
     (currentUser.role === 'manager') 
   );
+  const handleDownloadPdf = async () => {
+    setPdfLoading(true);
+    setPdfError(null);
+    const token = localStorage.getItem('token');
+
+    try {
+      const response = await axios.get(`/api/feedback/${feedbackId}/download-pdf`, { // <--- Ensure this is '/api/feedback/${feedbackId}/download-pdf'
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob', // Important for downloading files
+      });
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `feedback_${feedbackId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      setPdfError('Failed to download PDF. Please try again.');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
 
   return (
     <div className="container-fluid bg-light p-4 d-flex flex-column align-items-center justify-content-center min-vh-100">
